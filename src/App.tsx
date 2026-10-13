@@ -942,7 +942,7 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
             >
               <Icon name={menuOpen ? "close" : "menu"} size={18} />
             </IconButton>
-            <div className={styles.mobileTopbarBrand}>sing-box</div>
+            <div className={styles.mobileTopbarBrand}>Jiejiebox</div>
           </header>
         )}
         {menuOpen && (
@@ -957,7 +957,7 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
           <nav className={styles.sidebar}>
             <div className={styles.sidebarTitlebar} />
             <div className={styles.sidebarBrand}>
-              sing-box
+              Jiejiebox
               {serverInfo && <span className={styles.sidebarBrandVersion}>{serverInfo.version}</span>}
             </div>
             {started ? (
@@ -974,7 +974,7 @@ function ShellContent(props: ShellProps & { onRetry: () => void }) {
         ) : (
           <nav className={cx(styles.sidebar, menuOpen && styles.open)}>
             <div className={styles.sidebarBrand}>
-              sing-box
+              Jiejiebox
               {serverInfo && <span className={styles.sidebarBrandVersion}>{serverInfo.version}</span>}
             </div>
             {navItem("overview", t("Overview"), "dashboard", route.page === "overview")}

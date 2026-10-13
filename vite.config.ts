@@ -19,8 +19,8 @@ export default defineConfig({
         injectThemeColor: false,
       },
       manifest: {
-        name: "sing-box dashboard",
-        short_name: "sing-box",
+        name: "Jiejiebox dashboard",
+        short_name: "Jiejiebox",
         description: "Web dashboard for sing-box.",
         id: "./",
         start_url: "./",
