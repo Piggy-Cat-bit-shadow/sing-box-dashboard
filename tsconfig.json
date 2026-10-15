@@ -14,7 +14,15 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    // `@shared` is the desktop shell's own alias for `clients/desktop/src/shared`
+    // (`../tsconfig.web.json`, and the renderer half of `../electron.vite.config.ts`). It is
+    // repeated here because the Subscription-Userinfo parser lives in that directory - it
+    // belongs where the fetch happens - while the test that exercises it lives here, where the
+    // repository's only test runner is. `vite.config.ts` declares the same alias for vitest.
+    "paths": {
+      "@shared/*": ["../src/shared/*"]
+    }
   },
-  "include": ["src"]
+  "include": ["src", "../src/shared/subscription.ts"]
 }

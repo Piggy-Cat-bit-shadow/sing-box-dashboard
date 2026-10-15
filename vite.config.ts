@@ -1,13 +1,37 @@
 import react from "@vitejs/plugin-react";
+import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
   base: "./",
+  // The Subscription-Userinfo parser lives in the desktop shell (`../src/shared/subscription`)
+  // because that is where the fetch happens, but the only test runner in the repository is
+  // this workspace's. `@shared` is the desktop shell's own alias for that directory; it is
+  // repeated here because vitest resolves through Vite, and a relative path across the
+  // workspace boundary resolves in `tsc` and then fails at run time.
+  resolve: {
+    alias: {
+      "@shared": resolve(import.meta.dirname, "..", "src", "shared"),
+    },
+  },
   css: {
     modules: {
       localsConvention: "camelCaseOnly",
     },
+  },
+  server: {
+    port: 5173,
+    // Named so a dev-server request for the same directory is served rather than refused.
+    fs: {
+      allow: [
+        resolve(import.meta.dirname),
+        resolve(import.meta.dirname, "..", "src", "shared"),
+      ],
+    },
+  },
+  test: {
+    include: ["src/**/*.test.ts"],
   },
   plugins: [
     react(),
@@ -45,7 +69,4 @@ export default defineConfig({
       },
     }),
   ],
-  server: {
-    port: 5173,
-  },
 });

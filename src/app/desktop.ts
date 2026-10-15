@@ -26,6 +26,32 @@ export interface DaemonConnectionState {
 
 export type DesktopProfileType = "local" | "remote";
 
+/**
+ * The last subscription quota a remote profile's provider reported.
+ *
+ * Mirrors `ProfileSubscriptionQuota` in the desktop shell's `src/shared/ipc.ts`, which is
+ * what arrives over the profile list. The two are declared separately because the dashboard
+ * is a standalone package: this side is the transport shape, and the desktop side is the
+ * persistence shape.
+ */
+export interface DesktopProfileSubscription {
+  /** Bytes uploaded, as the provider reported them. */
+  upload?: number;
+  /** Bytes downloaded, as the provider reported them. */
+  download?: number;
+  /** Quota total in bytes. Absent when the provider sells no fixed quota. */
+  total?: number;
+  /** Unix timestamp in SECONDS, exactly as the header carried it. */
+  expire?: number;
+  /**
+   * When this snapshot arrived, in milliseconds.
+   *
+   * NOT `lastUpdated`: that one is when the profile CONTENT was last refreshed, and a
+   * provider can stop sending the header at any time, so the two genuinely differ.
+   */
+  updatedAt: number;
+}
+
 export interface DesktopProfile {
   id: string;
   name: string;
@@ -34,6 +60,7 @@ export interface DesktopProfile {
   autoUpdate: boolean;
   autoUpdateIntervalMinutes: number;
   lastUpdated?: number;
+  subscription?: DesktopProfileSubscription;
 }
 
 export interface DesktopProfilesState {

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import { formatRelativeTime } from "../api/format";
 import { describeError } from "../api/stream";
@@ -7,6 +7,11 @@ import type { DesktopHost, DesktopProfile, DesktopProfileType } from "../app/des
 import { useDesktopProfiles } from "../app/desktop";
 import { showError } from "../app/errorStore";
 import { useI18n } from "../app/i18n";
+import {
+  subscriptionQuotaDisplay,
+  subscriptionQuotaExpiry,
+  subscriptionQuotaSummary,
+} from "../app/subscriptionQuota";
 import { DesktopToolbar } from "../components/DesktopToolbar";
 import { Icon } from "../components/Icon";
 import type { JsonEditorHandle, JsonEditorSchema } from "../components/JsonEditor";
@@ -56,6 +61,51 @@ function ProfileInfo(props: { profile: DesktopProfile }) {
         </span>
       )}
     </span>
+  );
+}
+
+/**
+ * The subscription quota, as a second line under the profile's type and update time.
+ *
+ * Deliberately separate from `ProfileInfo` rather than folded into it. `ProfileInfo` is
+ * rendered twice - once here for the selected profile and once per row in the profile picker
+ * - and quota lines inside it would make every picker row taller, for information nobody
+ * reads while choosing a profile. It is also why this renders as its own block instead of as
+ * more `profileInfoItem`s: it is a different kind of statement, not another attribute.
+ *
+ * Renders NOTHING when the selected profile is local, when it has no snapshot, and when the
+ * snapshot turns out to carry no usable number. That is the whole no-data behaviour: no
+ * placeholder, no zeroes, no "Unknown" - a card claiming `0 B / 0 B` reads as a measurement,
+ * and there is nothing to measure.
+ */
+function SubscriptionQuotaInfo(props: { profile: DesktopProfile }) {
+  const { language, t } = useI18n();
+  // Re-evaluated on the same minute tick the update time uses, so an expiry that passes
+  // while the window is open changes from "Expires" to "Expired" without a reload.
+  const now = useNow(60_000);
+  const display = useMemo(
+    () => subscriptionQuotaDisplay(props.profile.subscription, now),
+    [props.profile.subscription, now],
+  );
+  if (display === undefined) {
+    return null;
+  }
+  const summary = subscriptionQuotaSummary(display, t);
+  const expiry = subscriptionQuotaExpiry(display, language, t);
+  if (summary === undefined && expiry === undefined) {
+    return null;
+  }
+  return (
+    <div className={styles.profileQuota}>
+      {summary !== undefined && (
+        <span className={cx(styles.profileQuotaItem, styles.profileQuotaSummary)}>{summary}</span>
+      )}
+      {expiry !== undefined && (
+        <span className={cx(styles.profileQuotaItem, display.expired && styles.profileQuotaExpired)}>
+          {expiry}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -199,6 +249,7 @@ export function ProfileCard(props: { host: DesktopHost }) {
               <div className={styles.profileMeta}>
                 <ProfileInfo profile={selected} />
               </div>
+              <SubscriptionQuotaInfo profile={selected} />
               <div className={cx("row-actions", styles.profileActions)}>
                 <IconButton title={t("Edit")} onClick={() => setEditing(true)}>
                   <Icon name="edit" size={16} />

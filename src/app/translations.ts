@@ -372,6 +372,12 @@ export const TRANSLATIONS = {
   "Type": { "zh-Hans": "类型", "zh-Hant": "類型", "fa": "نوع", "ru": "Тип" },
   "Local": { "zh-Hans": "本地", "zh-Hant": "本地", "fa": "محلی", "ru": "Локальный" },
   "Remote": { "zh-Hans": "远程", "zh-Hant": "遠程", "fa": "راه‌دور", "ru": "Удаленный" },
+  // Subscription quota. Only these four strings: the card names facts and a date, and every
+  // other number in it is a unit-formatted byte count that is not translated.
+  "Remaining {remaining} / {total}": { "zh-Hans": "剩余 {remaining} / {total}", "zh-Hant": "剩餘 {remaining} / {total}", "fa": "باقی‌مانده {remaining} / {total}", "ru": "Осталось {remaining} / {total}" },
+  "Used {used}": { "zh-Hans": "已用 {used}", "zh-Hant": "已用 {used}", "fa": "مصرف‌شده {used}", "ru": "Использовано {used}" },
+  "Expires {date}": { "zh-Hans": "{date} 到期", "zh-Hant": "{date} 到期", "fa": "انقضا {date}", "ru": "Истекает {date}" },
+  "Expired {date}": { "zh-Hans": "{date} 已到期", "zh-Hant": "{date} 已到期", "fa": "منقضی شده {date}", "ru": "Истёк {date}" },
   "Auto Update": { "zh-Hans": "自动更新", "zh-Hant": "自動更新", "fa": "به‌روزرسانی خودکار", "ru": "Автообновление" },
   "Auto Update Interval": { "zh-Hans": "自动更新间隔", "zh-Hant": "自動更新間隔", "fa": "بازه به‌روزرسانی خودکار", "ru": "Интервал автообновления" },
   "In Minutes": { "zh-Hans": "单位：分钟", "zh-Hant": "單位：分鐘", "fa": "به دقیقه", "ru": "В минутах" },
