@@ -12,6 +12,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+      # Same layout the Deploy workflow reproduces: `@shared` is `../src/shared`, the desktop
+      # shell where the `Subscription-Userinfo` parser lives. Without it `tsc -b` and the
+      # vitest run both fail to resolve the module.
+      - name: Materialise the desktop shell sources the `@shared` alias names
+        env:
+          SHELL_SHA: eb2dbf8ba7de0bb4f37e524dada0f30c38417282
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout \
+            https://github.com/Piggy-Cat-bit-shadow/sing-box-for-desktop.git \
+            "$GITHUB_WORKSPACE/../src"
+          git -C "$GITHUB_WORKSPACE/../src" checkout --quiet "$SHELL_SHA"
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
