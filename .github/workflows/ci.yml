@@ -21,8 +21,10 @@ jobs:
         run: |
           git clone --quiet --filter=blob:none --no-checkout \
             https://github.com/Piggy-Cat-bit-shadow/sing-box-for-desktop.git \
-            "$GITHUB_WORKSPACE/../src"
-          git -C "$GITHUB_WORKSPACE/../src" checkout --quiet "$SHELL_SHA"
+            "$RUNNER_WORKSPACE/shell"
+          git -C "$RUNNER_WORKSPACE/shell" checkout --quiet "$SHELL_SHA"
+          mkdir -p "$RUNNER_WORKSPACE/src"
+          cp -R "$RUNNER_WORKSPACE/shell/src/shared" "$RUNNER_WORKSPACE/src/shared"
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:

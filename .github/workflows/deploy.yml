@@ -28,17 +28,21 @@ jobs:
       # `@shared` alias, which `tsconfig.json` and `vite.config.ts` declare as `../src/shared`:
       # the desktop shell, where that parser belongs because that is where the fetch happens.
       # A standalone checkout of THIS repository has no such sibling, so `tsc -b` stops with
-      # TS2307 and nothing can be deployed. Reproduce the layout the sources are written for,
-      # pinned to the shell revision whose own `dashboard` submodule names this repository's
-      # `main` - a given dashboard commit then always builds against the same shell.
+      # TS2307 and nothing can be deployed. Reproduce the layout the sources are written for:
+      # the checkout is `$RUNNER_WORKSPACE/<this repository>`, so `../src/shared` is exactly
+      # `$RUNNER_WORKSPACE/src/shared`. Pinned to the shell revision whose own `dashboard`
+      # submodule names this repository's `main`, so a given dashboard commit always builds
+      # against the same shell.
       - name: Materialise the desktop shell sources the `@shared` alias names
         env:
           SHELL_SHA: eb2dbf8ba7de0bb4f37e524dada0f30c38417282
         run: |
           git clone --quiet --filter=blob:none --no-checkout \
             https://github.com/Piggy-Cat-bit-shadow/sing-box-for-desktop.git \
-            "$GITHUB_WORKSPACE/../src"
-          git -C "$GITHUB_WORKSPACE/../src" checkout --quiet "$SHELL_SHA"
+            "$RUNNER_WORKSPACE/shell"
+          git -C "$RUNNER_WORKSPACE/shell" checkout --quiet "$SHELL_SHA"
+          mkdir -p "$RUNNER_WORKSPACE/src"
+          cp -R "$RUNNER_WORKSPACE/shell/src/shared" "$RUNNER_WORKSPACE/src/shared"
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
