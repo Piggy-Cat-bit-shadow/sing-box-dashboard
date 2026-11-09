@@ -18,6 +18,10 @@ service StartedService {
   rpc SubscribeClashMode(google.protobuf.Empty) returns(stream ClashMode) {}
   rpc SetClashMode(ClashMode) returns(google.protobuf.Empty) {}
 
+  // RefreshRemoteProviders runs a bounded manual refresh of the running box's remote
+  // providers. It is additive: an older client simply never calls it.
+  rpc RefreshRemoteProviders(RefreshRemoteProvidersRequest) returns(RemoteProviderRefreshResponse) {}
+
   rpc URLTest(URLTestRequest) returns(google.protobuf.Empty) {}
   rpc SelectOutbound(SelectOutboundRequest) returns (google.protobuf.Empty) {}
   rpc SetGroupExpand(SetGroupExpandRequest) returns (google.protobuf.Empty) {}
@@ -28,6 +32,12 @@ service StartedService {
   rpc GetDeprecatedWarnings(google.protobuf.Empty) returns(DeprecatedWarnings) {}
   rpc GetStartedAt(google.protobuf.Empty) returns(StartedAt) {}
 
+  // Additive configuration surface: JSON preserves the in-process contract without forcing every
+  // client to regenerate a full set of messages before it can display a plan or a recovery.
+  rpc PreviewServiceChange(PreviewServiceChangeRequest) returns(JSONDocument) {}
+  rpc GetLastServiceChange(google.protobuf.Empty) returns(JSONDocument) {}
+  rpc GetLastConfigRecovery(google.protobuf.Empty) returns(JSONDocument) {}
+
   rpc SubscribeOutbounds(google.protobuf.Empty) returns (stream OutboundList) {}
   rpc StartNetworkQualityTest(NetworkQualityTestRequest) returns (stream NetworkQualityTestProgress) {}
   rpc StartSTUNTest(STUNTestRequest) returns (stream STUNTestProgress) {}
@@ -35,6 +45,7 @@ service StartedService {
   rpc StartTailscalePing(TailscalePingRequest) returns (stream TailscalePingResponse) {}
   rpc SetTailscaleExitNode(SetTailscaleExitNodeRequest) returns (google.protobuf.Empty) {}
   rpc TailscaleLogout(TailscaleLogoutRequest) returns (google.protobuf.Empty) {}
+  rpc GetTailscaleCertificate(TailscaleCertificateRequest) returns (TailscaleCertificate) {}
   rpc StartTailscaleSSHSession(stream TailscaleSSHClientMessage) returns (stream TailscaleSSHServerMessage) {}
   rpc SubscribeTaildropInbox(SubscribeTaildropInboxRequest) returns (stream TaildropInbox) {}
   rpc MarkTaildropInboxRead(MarkTaildropInboxReadRequest) returns (google.protobuf.Empty) {}
@@ -50,11 +61,21 @@ service StartedService {
   rpc SubscribeOpenVPNStatus(google.protobuf.Empty) returns (stream OpenVPNStatusUpdate) {}
   rpc SubmitOpenVPNChallengeResponse(OpenVPNChallengeSubmission) returns (google.protobuf.Empty) {}
   rpc CancelOpenVPNChallenge(OpenVPNChallengeCancel) returns (google.protobuf.Empty) {}
+  rpc SubscribeNotifications(google.protobuf.Empty) returns (stream NotificationEvent) {}
+
 }
 
 message Version {
   string version = 1;
   int32 apiVersion = 2;
+}
+
+message JSONDocument {
+  string json = 1;
+}
+
+message PreviewServiceChangeRequest {
+  string config_content = 1;
 }
 
 message ServiceStatus {
@@ -131,6 +152,7 @@ message GroupItem {
 message URLTestRequest {
   string outboundTag = 1;
 }
+
 
 message SelectOutboundRequest {
   string groupTag = 1;
@@ -292,6 +314,7 @@ message TailscaleEndpointStatus {
   int32 waitingFileCount = 12;
   int32 receivingFileCount = 13;
   int32 unreadFileCount = 14;
+  repeated string certDomains = 15;
 }
 
 message TailscaleUserGroup {
@@ -344,6 +367,17 @@ message SetTailscaleExitNodeRequest {
 
 message TailscaleLogoutRequest {
   string endpointTag = 1;
+}
+
+message TailscaleCertificateRequest {
+  string endpointTag = 1;
+  string domain = 2;
+  int64 minValiditySeconds = 3;
+}
+
+message TailscaleCertificate {
+  bytes certificatePEM = 1;
+  bytes privateKeyPEM = 2;
 }
 
 message TailscaleSSHClientMessage {
@@ -769,4 +803,50 @@ message OpenVPNChallengeSubmission {
 message OpenVPNChallengeCancel {
   string endpointTag = 1;
   string challengeID = 2;
+}
+
+message NotificationEvent {
+  oneof event {
+    Notification send = 1;
+    NotificationCancel cancel = 2;
+  }
+}
+
+message Notification {
+  string identifier = 1;
+  string typeName = 2;
+  int32 typeID = 3;
+  string title = 4;
+  string subtitle = 5;
+  string body = 6;
+  string openURL = 7;
+}
+
+message NotificationCancel {
+  string identifier = 1;
+  int32 typeID = 2;
+}
+
+// RefreshRemoteProvidersRequest selects the providers to refresh. An empty tag list means every
+// provider the running box serves; timeout_ms bounds EACH provider.
+message RefreshRemoteProvidersRequest {
+  repeated string tags = 1;
+  int64 timeout_ms = 2;
+}
+
+// RemoteProviderRefreshResult is one provider's outcome, as the daemon proved it.
+message RemoteProviderRefreshResult {
+  string tag = 1;
+  string status = 2;
+  uint64 requested_revision = 3;
+  uint64 applied_revision = 4;
+  repeated string pending_tags = 5;
+  bool restart_required = 6;
+  string reason = 7;
+}
+
+message RemoteProviderRefreshResponse {
+  repeated RemoteProviderRefreshResult results = 1;
+  bool cancelled = 2;
+  bool box_changed = 3;
 }

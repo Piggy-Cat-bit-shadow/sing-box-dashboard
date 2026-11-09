@@ -1,4 +1,4 @@
-import type { DescMessage, DescMethodBiDiStreaming } from "@bufbuild/protobuf";
+﻿import type { DescMessage, DescMethodBiDiStreaming } from "@bufbuild/protobuf";
 import type { Client, Transport } from "@connectrpc/connect";
 import { Code, ConnectError, createClient } from "@connectrpc/connect";
 import { createGrpcWebTransport } from "@connectrpc/connect-web";
@@ -106,6 +106,91 @@ export interface OpenVPNData {
 export interface ServerInfo {
   version: string;
   apiVersion: number;
+}
+
+// The configuration RPCs carry JSON on purpose: the kernel can add a domain without forcing this
+// client to regenerate every message, and an older kernel without the RPC answers Unimplemented.
+export interface ServiceChangeDomainPlan {
+  domain: string;
+  supported?: boolean;
+  currentRevision?: string;
+  targetRevision?: string;
+  liveRefresh?: boolean;
+  liveRefreshReason?: string;
+  changes?: string[];
+  tags?: string[];
+}
+
+export interface ProviderRefreshResult {
+  tag: string;
+  status: string;
+  requestedRevision?: string;
+  appliedRevision?: string;
+  pendingTags?: string[];
+  restartRequired?: boolean;
+  reason?: string;
+}
+
+export interface ProviderDomainReport {
+  domain: string;
+  status: string;
+  results?: ProviderRefreshResult[];
+  restartRequired: boolean;
+  reason?: string;
+  revision?: string;
+}
+
+export interface ServiceChangePlan {
+  started: boolean;
+  currentRevision?: string;
+  targetRevision?: string;
+  unchanged: boolean;
+  liveOnly: boolean;
+  restartRequired: boolean;
+  changedDocument: boolean;
+  stale?: boolean;
+  changedSections?: string[];
+  mode?: ServiceChangeDomainPlan;
+  dns?: ServiceChangeDomainPlan;
+  rule?: ServiceChangeDomainPlan;
+  provider?: ServiceChangeDomainPlan;
+}
+
+export interface ServiceChangeReport {
+  plan: ServiceChangePlan;
+  status: string;
+  restartRequired: boolean;
+  retained: boolean;
+  activeRevision?: string;
+  persistence?: string;
+  persistenceWarning?: string;
+  reason?: string;
+  time: string;
+  applied?: unknown[];
+  provider?: ProviderDomainReport;
+}
+
+export interface ConfigRecoveryInfo {
+  time: string;
+  failedRevision: string;
+  activeRevision: string;
+  error: string;
+}
+
+export function decodeJSONDocument<T>(json: string): T | null {
+  const value: unknown = JSON.parse(json);
+  if (value === null) {
+    return null;
+  }
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("configuration document is not an object");
+  }
+  // Unknown fields are deliberately kept: the kernel may add one before this client knows it.
+  return value as T;
+}
+
+export function isConfigurationRPCAvailable(error: unknown): boolean {
+  return error instanceof ConnectError && error.code === Code.Unimplemented;
 }
 
 const SUBSCRIPTION_INTERVAL = 1_000_000_000n;
@@ -465,6 +550,42 @@ export class DaemonApi {
     return Number(response.startedAt);
   }
 
+  async previewServiceChange(configContent: string): Promise<ServiceChangePlan | null> {
+    try {
+      const response = await this.client.previewServiceChange({ configContent });
+      return decodeJSONDocument<ServiceChangePlan>(response.json);
+    } catch (error) {
+      if (isConfigurationRPCAvailable(error)) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  async lastServiceChange(): Promise<ServiceChangeReport | null> {
+    try {
+      const response = await this.client.getLastServiceChange({});
+      return decodeJSONDocument<ServiceChangeReport>(response.json);
+    } catch (error) {
+      if (isConfigurationRPCAvailable(error)) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  async lastConfigRecovery(): Promise<ConfigRecoveryInfo | null> {
+    try {
+      const response = await this.client.getLastConfigRecovery({});
+      return decodeJSONDocument<ConfigRecoveryInfo>(response.json);
+    } catch (error) {
+      if (isConfigurationRPCAvailable(error)) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
   async getDeprecatedWarnings(): Promise<DeprecatedWarning[]> {
     const response = await this.client.getDeprecatedWarnings({});
     return response.warnings;
@@ -522,3 +643,4 @@ function pruneClosedRows(rows: Map<string, ConnectionRow>) {
     rows.delete(closedRows[i].id);
   }
 }
+
