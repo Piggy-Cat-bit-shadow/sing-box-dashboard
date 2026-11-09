@@ -261,3 +261,33 @@
   pointer-events: none;
   animation: spin 1s linear infinite;
 }
+
+/* The two halves of the last remote update. Always rendered as two lines: "saved but not
+   applied" and "providers refused" are facts the user has to be able to tell apart. */
+.update-result {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.update-result-line {
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.update-result-error {
+  color: var(--danger);
+}
+
+.update-result-warning {
+  color: var(--text-secondary);
+}
+
+.update-result-compact {
+  margin-top: 2px;
+  font-size: var(--text-xs, 11px);
+}

@@ -68,6 +68,65 @@ export interface DesktopProfilesState {
   profiles: DesktopProfile[];
 }
 
+/**
+ * The two halves of a remote-profile update.
+ *
+ * Mirrors `RemoteProfileUpdate` in the desktop shell's `src/shared/remoteUpdate.ts`. Declared
+ * separately because this dashboard is a standalone package: the shell owns the daemon, this side
+ * owns the rendering of what the shell reports. `updateRemote` used to resolve `void`, so neither
+ * half could be shown and any non-throwing outcome looked the same.
+ */
+export type DesktopConfigUpdateStatus =
+  | "unchanged"
+  | "applied"
+  | "saved"
+  | "apply-failed"
+  | "apply-unconfirmed"
+  | "invalid-config"
+  | "download-failed"
+  | "superseded";
+
+export type DesktopProviderUpdateStatus =
+  | "published"
+  | "unchanged"
+  | "partial"
+  | "failed"
+  | "busy"
+  | "cancelled"
+  | "box-changed"
+  | "none"
+  | "not-active"
+  | "not-running"
+  | "unsupported"
+  | "unavailable";
+
+export interface DesktopProviderUpdateCounts {
+  published: number;
+  unchanged: number;
+  failed: number;
+  skipped: number;
+  busy: number;
+  pending: number;
+  restartRequired: number;
+  total: number;
+}
+
+export interface DesktopRemoteProfileUpdate {
+  profileId: string;
+  changed: boolean;
+  config: {
+    status: DesktopConfigUpdateStatus;
+    detail?: string;
+    previousStartedAt?: string;
+    startedAt?: string;
+  };
+  providers: {
+    status: DesktopProviderUpdateStatus;
+    counts?: DesktopProviderUpdateCounts;
+    detail?: string;
+  };
+}
+
 export interface DesktopServer {
   id: string;
   name: string;
@@ -338,7 +397,7 @@ export interface DesktopHost {
     select(id: string): Promise<void>;
     readContent(id: string): Promise<string>;
     writeContent(id: string, content: string): Promise<void>;
-    updateRemote(id: string): Promise<void>;
+    updateRemote(id: string): Promise<DesktopRemoteProfileUpdate>;
     pickImportFile(): Promise<{ fileName: string; data: Uint8Array } | null>;
     exportFile(id: string): Promise<boolean>;
     importData(fileName: string, data: Uint8Array): Promise<void>;

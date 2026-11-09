@@ -3,10 +3,16 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { formatRelativeTime } from "../api/format";
 import { describeError } from "../api/stream";
 import { navigate, useNow } from "../app/context";
-import type { DesktopHost, DesktopProfile, DesktopProfileType } from "../app/desktop";
+import type {
+  DesktopHost,
+  DesktopProfile,
+  DesktopProfileType,
+  DesktopRemoteProfileUpdate,
+} from "../app/desktop";
 import { useDesktopProfiles } from "../app/desktop";
 import { showError } from "../app/errorStore";
 import { useI18n } from "../app/i18n";
+import { summarizeRemoteUpdate } from "../app/remoteUpdate";
 import {
   subscriptionQuotaDisplay,
   subscriptionQuotaExpiry,
@@ -179,6 +185,35 @@ function ShareMenuItems(props: {
   );
 }
 
+/**
+ * The two halves of the last remote update, as a status block under the profile.
+ *
+ * Both lines are always present. The update used to resolve `void`, so a saved-but-not-running
+ * profile, a refused provider group and a clean apply all looked identical (or produced only an
+ * exception dialog); the user could not tell whether the nodes or the config had taken effect.
+ */
+function RemoteUpdateStatus(props: { result: DesktopRemoteProfileUpdate; compact?: boolean }) {
+  const summary = summarizeRemoteUpdate(props.result);
+  const icon = summary.tone === "success" ? "check" : "warning_amber";
+  return (
+    <span
+      className={cx(
+        styles.updateResult,
+        summary.tone === "error" && styles.updateResultError,
+        summary.tone === "warning" && styles.updateResultWarning,
+        props.compact && styles.updateResultCompact,
+      )}
+      role="status"
+    >
+      <span className={styles.updateResultLine}>
+        <Icon name={icon} size={12} />
+        {summary.config}
+      </span>
+      <span className={styles.updateResultLine}>{summary.providers}</span>
+    </span>
+  );
+}
+
 export function ProfileCard(props: { host: DesktopHost }) {
   const host = props.host;
   const { t } = useI18n();
@@ -189,6 +224,7 @@ export function ProfileCard(props: { host: DesktopHost }) {
   const [showingQR, setShowingQR] = useState(false);
   const [showingQRS, setShowingQRS] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [updateResult, setUpdateResult] = useState<DesktopRemoteProfileUpdate | null>(null);
   const [importRequest, setImportRequest] = useState<{
     fileName: string;
     data: Uint8Array;
@@ -212,8 +248,10 @@ export function ProfileCard(props: { host: DesktopHost }) {
       return;
     }
     setUpdating(true);
+    setUpdateResult(null);
     host.profiles
       .updateRemote(selected.id)
+      .then((result) => setUpdateResult(result))
       .catch(showError)
       .finally(() => setUpdating(false));
   };
@@ -250,6 +288,9 @@ export function ProfileCard(props: { host: DesktopHost }) {
                 <ProfileInfo profile={selected} />
               </div>
               <SubscriptionQuotaInfo profile={selected} />
+              {updateResult !== null && updateResult.profileId === selected.id && (
+                <RemoteUpdateStatus result={updateResult} />
+              )}
               <div className={cx("row-actions", styles.profileActions)}>
                 <IconButton title={t("Edit")} onClick={() => setEditing(true)}>
                   <Icon name="edit" size={16} />
@@ -305,6 +346,7 @@ function ProfilePickerDialog(props: { host: DesktopHost; onClose: () => void }) 
   const [qrProfile, setQRProfile] = useState<DesktopProfile | null>(null);
   const [qrsProfile, setQRSProfile] = useState<DesktopProfile | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [updateResults, setUpdateResults] = useState<Record<string, DesktopRemoteProfileUpdate>>({});
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -317,8 +359,16 @@ function ProfilePickerDialog(props: { host: DesktopHost; onClose: () => void }) 
 
   const updateRemote = (profile: DesktopProfile) => {
     setUpdatingId(profile.id);
+    setUpdateResults((current) => {
+      const next = { ...current };
+      delete next[profile.id];
+      return next;
+    });
     host.profiles
       .updateRemote(profile.id)
+      .then((result) =>
+        setUpdateResults((current) => ({ ...current, [profile.id]: result })),
+      )
       .catch(showError)
       .finally(() => setUpdatingId(null));
   };
@@ -400,6 +450,9 @@ function ProfilePickerDialog(props: { host: DesktopHost; onClose: () => void }) 
             >
               <span className={styles.profileRowName}>{profile.name}</span>
               <ProfileInfo profile={profile} />
+              {updateResults[profile.id] && (
+                <RemoteUpdateStatus result={updateResults[profile.id]} compact />
+              )}
             </button>
             <div className={styles.profileRowActions}>
               {editing ? (
