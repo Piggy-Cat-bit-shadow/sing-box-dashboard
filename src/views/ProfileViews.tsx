@@ -1,15 +1,27 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { formatRelativeTime } from "../api/format";
 import { describeError } from "../api/stream";
 import { navigate, useNow } from "../app/context";
 import type {
+  DesktopConfigRecoveryInfo,
+  DesktopConfigurationDocument,
   DesktopHost,
   DesktopProfile,
   DesktopProfileType,
   DesktopRemoteProfileUpdate,
+  DesktopServiceChangePlan,
+  DesktopServiceChangeReport,
 } from "../app/desktop";
 import { useDesktopProfiles } from "../app/desktop";
+import {
+  summarizeDocument,
+  summarizePlan,
+  summarizeRecovery,
+  summarizeReport,
+  type ConfigStatusSummary,
+  type ConfigStatusTone,
+} from "../app/configStatus";
 import { showError } from "../app/errorStore";
 import { useI18n } from "../app/i18n";
 import { summarizeRemoteUpdate } from "../app/remoteUpdate";
@@ -706,6 +718,101 @@ function EditProfileDialog(props: {
 
 const EDITOR_SYMBOLS = ['"', ":", ",", "{", "}", "[", "]", "true", "false"];
 
+function toneRank(tone: ConfigStatusTone): number {
+  switch (tone) {
+    case "error":
+      return 2;
+    case "warning":
+      return 1;
+    case "success":
+      return 0;
+  }
+}
+
+/**
+ * The configuration plan, the last apply report and the last recovery, in one block.
+ *
+ * These are three independent facts and are never collapsed into a single "OK": the plan says
+ * what applying the edited document would cost, the report says what the last attempt actually
+ * did (including a retained document and a degraded last-good store), and a recovery means the
+ * instance in front of the user is running something the user did not ask for.
+ */
+function ConfigurationStatus(props: {
+  preview: DesktopConfigurationDocument<DesktopServiceChangePlan> | null;
+  previewError: string | null;
+  lastChange: DesktopConfigurationDocument<DesktopServiceChangeReport> | null;
+  recovery: DesktopConfigurationDocument<DesktopConfigRecoveryInfo> | null;
+  error: string | null;
+  onRefresh: () => void;
+}) {
+  const { t } = useI18n();
+  const summaries: ConfigStatusSummary[] = [];
+  if (props.previewError !== null) {
+    summaries.push({ lines: [`Preview: ${props.previewError}`], tone: "error" });
+  } else if (props.preview !== null) {
+    summaries.push(
+      summarizeDocument(
+        props.preview,
+        summarizePlan,
+        "Preview: this daemon has no plan for this document yet",
+        "Preview: this kernel predates the configuration plan RPC",
+      ),
+    );
+  }
+  if (props.lastChange !== null) {
+    summaries.push(
+      summarizeDocument(
+        props.lastChange,
+        summarizeReport,
+        "Last apply: this instance has not applied a configuration yet",
+        "Last apply: this kernel predates the configuration report RPC",
+      ),
+    );
+  }
+  if (props.recovery !== null) {
+    if (props.recovery.kind === "document") {
+      summaries.push(summarizeRecovery(props.recovery.document));
+    } else if (props.recovery.kind === "unsupported") {
+      summaries.push({
+        lines: ["Recovery: this kernel predates the configuration recovery RPC"],
+        tone: "warning",
+      });
+    }
+  }
+  if (props.error !== null) {
+    summaries.push({ lines: [props.error], tone: "error" });
+  }
+  if (summaries.length === 0) {
+    return null;
+  }
+  const tone = summaries.reduce<ConfigStatusTone>(
+    (worst, summary) => (toneRank(summary.tone) > toneRank(worst) ? summary.tone : worst),
+    "success",
+  );
+  return (
+    <div
+      className={cx(
+        styles.configStatus,
+        tone === "error" && styles.configStatusError,
+        tone === "warning" && styles.configStatusWarning,
+      )}
+      role="status"
+    >
+      <div className={styles.configStatusHeader}>
+        <span>{t("Configuration")}</span>
+        <IconButton title="Refresh" aria-label="Refresh" onClick={props.onRefresh}>
+          <Icon name="sync" size={14} />
+        </IconButton>
+      </div>
+      <ul className={styles.configStatusList}>
+        {summaries.flatMap((summary) =>
+          summary.lines.map((line, index) => <li key={`${line}-${index}`}>{line}</li>),
+        )}
+      </ul>
+    </div>
+  );
+}
+
 export function ProfileContentWindow(props: {
   host: DesktopHost;
   profileId: string;
@@ -721,6 +828,14 @@ export function ProfileContentWindow(props: {
   const [confirmingClose, setConfirmingClose] = useState(false);
   const [busy, setBusy] = useState(false);
   const [schema, setSchema] = useState<JsonEditorSchema | null>(null);
+  const [preview, setPreview] =
+    useState<DesktopConfigurationDocument<DesktopServiceChangePlan> | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [lastChange, setLastChange] =
+    useState<DesktopConfigurationDocument<DesktopServiceChangeReport> | null>(null);
+  const [recovery, setRecovery] =
+    useState<DesktopConfigurationDocument<DesktopConfigRecoveryInfo> | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
   const contentRef = useRef<string | null>(null);
   const savedContentRef = useRef<string | null>(null);
   const editorRef = useRef<JsonEditorHandle>(null);
@@ -735,8 +850,28 @@ export function ProfileContentWindow(props: {
           return;
         }
         host.configuration.check(value).then(
-          () => setCheckError(null),
-          (error: unknown) => setCheckError(describeError(error).message),
+          () => {
+            setCheckError(null);
+            // The plan is computed against the RUNNING instance, so it only describes this
+            // document once the document is valid enough to be planned at all.
+            host.configuration.previewChange(value).then(
+              (result) => {
+                setPreview(result);
+                setPreviewError(null);
+              },
+              (error: unknown) => {
+                setPreview(null);
+                setPreviewError(describeError(error).message);
+              },
+            );
+          },
+          (error: unknown) => {
+            setCheckError(describeError(error).message);
+            // A rejected document has no plan. Keeping the previous one would describe a
+            // different document than the one in the editor.
+            setPreview(null);
+            setPreviewError(null);
+          },
         );
       },
     });
@@ -751,6 +886,18 @@ export function ProfileContentWindow(props: {
         savedContentRef.current = value;
         setContent(() => value);
         setSavedContent(() => value);
+        // A stored document is previewed as soon as it is read: the user opened this window to
+        // see what applying it would do, and waiting for the first keystroke would hide that.
+        return host.configuration.previewChange(value).then(
+          (result) => {
+            setPreview(result);
+            setPreviewError(null);
+          },
+          (error: unknown) => {
+            setPreview(null);
+            setPreviewError(describeError(error).message);
+          },
+        );
       })
       .catch((error: unknown) => {
         showError(error);
@@ -760,6 +907,27 @@ export function ProfileContentWindow(props: {
       checkScheduler.cancel();
     };
   }, [host, props.profileId, checkScheduler]);
+
+  const refreshStatus = useCallback(() => {
+    host.configuration.lastServiceChange().then(
+      (result) => {
+        setLastChange(result);
+        setStatusError(null);
+      },
+      (error: unknown) => setStatusError(describeError(error).message),
+    );
+    host.configuration.lastConfigRecovery().then(
+      (result) => {
+        setRecovery(result);
+        setStatusError(null);
+      },
+      (error: unknown) => setStatusError(describeError(error).message),
+    );
+  }, [host]);
+
+  useEffect(() => {
+    refreshStatus();
+  }, [refreshStatus]);
 
   useEffect(() => {
     let cancelled = false;
@@ -821,6 +989,9 @@ export function ProfileContentWindow(props: {
       const savedAllChanges = contentRef.current === nextSavedContent;
       host.profileEditor.setDirty(!savedAllChanges);
       setSavedContent(() => nextSavedContent);
+      // Saving is the point at which the daemon's record of "what was applied" can have moved, so
+      // the two status lines are re-read rather than left describing the previous document.
+      refreshStatus();
       return savedAllChanges;
     } catch (error) {
       showError(error);
@@ -908,6 +1079,14 @@ export function ProfileContentWindow(props: {
             />
           </Suspense>
         )}
+        <ConfigurationStatus
+          preview={preview}
+          previewError={previewError}
+          lastChange={lastChange}
+          recovery={recovery}
+          error={statusError}
+          onRefresh={refreshStatus}
+        />
         {checkError !== null && (
           <div className={cx("banner error", styles.editorBanner)}>
             <span className={styles.editorBannerMessage}>{checkError}</span>

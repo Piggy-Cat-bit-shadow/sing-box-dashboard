@@ -262,6 +262,50 @@
   animation: spin 1s linear infinite;
 }
 
+/* The plan, the last apply report and the last recovery. Deliberately a list of facts rather than
+   a single badge: "saved but not running", "retained the old document" and "recovered from a
+   failed start" are different states and only one of them is a success. */
+.config-status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-8) var(--space-10);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  background: var(--surface-subtle);
+  border-bottom: 1px solid var(--border);
+}
+
+.config-status-error {
+  color: var(--danger);
+}
+
+.config-status-warning {
+  color: var(--text-secondary);
+}
+
+.config-status-header {
+  display: flex;
+  gap: var(--space-6);
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.config-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.config-status-list li {
+  overflow-wrap: anywhere;
+}
+
 /* The two halves of the last remote update. Always rendered as two lines: "saved but not
    applied" and "providers refused" are facts the user has to be able to tell apart. */
 .update-result {

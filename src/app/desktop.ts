@@ -127,6 +127,106 @@ export interface DesktopRemoteProfileUpdate {
   };
 }
 
+/**
+ * The daemon's configuration documents (`PreviewServiceChange` / `GetLastServiceChange` /
+ * `GetLastConfigRecovery`), as the shell relays them.
+ *
+ * Declared here rather than imported from the shell for the same reason as the remote-update
+ * types: this dashboard is a standalone package and the shell is the other side of a process
+ * boundary. The kernel's JSON is the contract; these interfaces name the fields this UI reads,
+ * and unknown fields are deliberately kept by the shell so a newer kernel does not break an
+ * older client.
+ */
+export interface DesktopDomainChange {
+  kind: string;
+  from?: string;
+  to?: string;
+  detail?: string;
+}
+
+export interface DesktopServiceChangeDomainPlan {
+  domain: string;
+  supported: boolean;
+  unsupportedReason?: string;
+  restartRequired: boolean;
+  changes?: DesktopDomainChange[];
+  currentRevision?: string;
+  targetRevision?: string;
+}
+
+export interface DesktopProviderDomainPlan {
+  domain: string;
+  supported: boolean;
+  unsupportedReason?: string;
+  tags?: string[];
+  liveRefresh?: boolean;
+  liveRefreshReason?: string;
+  currentRevision?: string;
+  targetRevision?: string;
+}
+
+export interface DesktopServiceChangePlan {
+  started: boolean;
+  currentRevision?: string;
+  targetRevision?: string;
+  unchanged: boolean;
+  liveOnly: boolean;
+  restartRequired: boolean;
+  changedDocument: boolean;
+  stale?: boolean;
+  changedSections?: string[];
+  mode?: DesktopServiceChangeDomainPlan;
+  dns?: DesktopServiceChangeDomainPlan;
+  rule?: DesktopServiceChangeDomainPlan;
+  provider?: DesktopProviderDomainPlan;
+}
+
+export interface DesktopProviderRefreshResult {
+  tag: string;
+  status: string;
+  requestedRevision?: number;
+  appliedRevision?: number;
+  pendingTags?: string[];
+  restartRequired?: boolean;
+  reason?: string;
+}
+
+export interface DesktopProviderDomainReport {
+  domain: string;
+  status: string;
+  results?: DesktopProviderRefreshResult[];
+  restartRequired: boolean;
+  reason?: string;
+  revision?: string;
+}
+
+export interface DesktopServiceChangeReport {
+  plan: DesktopServiceChangePlan;
+  status: string;
+  restartRequired: boolean;
+  retained: boolean;
+  activeRevision?: string;
+  persistence?: string;
+  persistenceWarning?: string;
+  reason?: string;
+  time: string;
+  applied?: DesktopDomainChange[];
+  provider?: DesktopProviderDomainReport;
+}
+
+export interface DesktopConfigRecoveryInfo {
+  time: string;
+  failedRevision: string;
+  activeRevision: string;
+  error: string;
+}
+
+/** One configuration document, or the reason the shell has none. */
+export type DesktopConfigurationDocument<T> =
+  | { kind: "document"; document: T }
+  | { kind: "absent" }
+  | { kind: "unsupported" };
+
 export interface DesktopServer {
   id: string;
   name: string;
@@ -333,6 +433,17 @@ export interface DesktopHost {
     check(content: string): Promise<void>;
     format(content: string): Promise<string>;
     generateSchema(): Promise<string>;
+    /**
+     * What applying `content` would mean for the running instance.
+     *
+     * `absent`/`unsupported` are results, not exceptions: the first means the daemon has no plan
+     * to report, the second that this kernel does not have the RPC at all.
+     */
+    previewChange(content: string): Promise<DesktopConfigurationDocument<DesktopServiceChangePlan>>;
+    /** What the last apply attempt planned and did. */
+    lastServiceChange(): Promise<DesktopConfigurationDocument<DesktopServiceChangeReport>>;
+    /** The last recovery from a failed start, or `absent` when the last start was normal. */
+    lastConfigRecovery(): Promise<DesktopConfigurationDocument<DesktopConfigRecoveryInfo>>;
   };
   tools: {
     startStandaloneNetworkQualityTest(
