@@ -71,4 +71,14 @@ describe("summarizeRemoteUpdate", () => {
     expect(summary.providers).toContain("predates");
     expect(summary.tone).toBe("warning");
   });
+
+  it("does not attribute a provider report to an instance replaced mid-update", () => {
+    const summary = summarizeRemoteUpdate(
+      update({
+        providers: { status: "superseded", detail: "the instance changed during the update" },
+      }),
+    );
+    expect(summary.providers).toContain("newer operation owns the instance");
+    expect(summary.tone).toBe("warning");
+  });
 });

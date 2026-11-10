@@ -97,6 +97,7 @@ export type DesktopProviderUpdateStatus =
   | "none"
   | "not-active"
   | "not-running"
+  | "superseded"
   | "unsupported"
   | "unavailable";
 

@@ -30,6 +30,7 @@ const PROVIDER_ERROR: ReadonlySet<DesktopRemoteProfileUpdate["providers"]["statu
 const PROVIDER_WARNING: ReadonlySet<DesktopRemoteProfileUpdate["providers"]["status"]> = new Set([
   "not-active",
   "not-running",
+  "superseded",
   "unsupported",
 ]);
 
@@ -91,6 +92,8 @@ function providerText(update: DesktopRemoteProfileUpdate): string {
       return "Providers not refreshed: the profile is not active";
     case "not-running":
       return "Providers not refreshed: not connected";
+    case "superseded":
+      return withDetail("Providers not refreshed: a newer operation owns the instance", detail);
     case "unsupported":
       return "Providers not refreshed: the daemon predates the provider refresh RPC";
     case "unavailable":
