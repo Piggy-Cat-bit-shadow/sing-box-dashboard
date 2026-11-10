@@ -38,11 +38,12 @@ function revisionPair(current: string | undefined, target: string | undefined): 
 
 function planReasons(plan: DesktopServiceChangePlan): string[] {
   const reasons: string[] = [];
-  if (plan.changedDocument) {
-    reasons.push("the document differs outside the live domains");
-  }
+  // The section names are the caller's own vocabulary, so they are preferred over the generic
+  // sentence; the sentence is only the fallback when the kernel names no section.
   if (plan.changedSections && plan.changedSections.length > 0) {
     reasons.push(plan.changedSections.join(", "));
+  } else if (plan.changedDocument) {
+    reasons.push("the document differs outside the live domains");
   }
   for (const domain of [plan.mode, plan.dns, plan.rule]) {
     if (domain?.restartRequired && domain.changes && domain.changes.length > 0) {
@@ -55,10 +56,17 @@ function planReasons(plan: DesktopServiceChangePlan): string[] {
 /**
  * What applying this document would mean.
  *
- * The kernel computes this BEFORE anything is touched, so the two outcomes that look identical in
- * a boolean - "applies in place" and "drops every connection" - are separated here. `unchanged`
- * is still a plan: the caller asked for a reload, and the answer is that the running instance
- * already has this document.
+ * `started` means a Box is RUNNING right now; `started: false` is the first start. The order below
+ * is the contract, and it is not the order the fields suggest:
+ *
+ *   unchanged  the running Box already runs this document, so nothing starts
+ *   stale      the plan lost its base; it must be recomputed, whatever else it claims
+ *   !started   the only case that starts a new instance
+ *   restart    a running Box must be rebuilt, and the plan names why
+ *   liveOnly   the running Box absorbs the change in place
+ *
+ * Reading `started` first, as an inverted "will start" flag, silently hid the live, restart and
+ * stale branches behind one wrong sentence - the P1 this ordering fixes.
  */
 export function summarizePlan(plan: DesktopServiceChangePlan): ConfigStatusSummary {
   if (plan.unchanged) {
@@ -67,17 +75,17 @@ export function summarizePlan(plan: DesktopServiceChangePlan): ConfigStatusSumma
       tone: "success",
     };
   }
-  if (plan.started) {
+  if (plan.stale) {
+    return {
+      lines: ["Preview: the running configuration changed while this plan was computed; refresh it before applying"],
+      tone: "warning",
+    };
+  }
+  if (!plan.started) {
     return {
       lines: [
         `Preview: this document would start a new instance (target revision ${formatRevision(plan.targetRevision) || "unknown"})`,
       ],
-      tone: "warning",
-    };
-  }
-  if (plan.stale) {
-    return {
-      lines: ["Preview: the running configuration changed while this plan was computed; refresh it before applying"],
       tone: "warning",
     };
   }

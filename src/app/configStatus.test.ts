@@ -54,6 +54,10 @@ describe("summarizePlan", () => {
   it("names the sections that force a restart", () => {
     const summary = summarizePlan(
       plan({
+        // A restart plan is about a Box that is already running; `started: false` would be the
+        // first start, where nothing can be restarted. The fixture said otherwise and the
+        // summarizer used to hide the difference.
+        started: true,
         restartRequired: true,
         changedDocument: true,
         changedSections: ["inbounds", "outbounds"],
@@ -67,7 +71,7 @@ describe("summarizePlan", () => {
   });
 
   it("reports a live-only change as one that needs no restart", () => {
-    const summary = summarizePlan(plan({ liveOnly: true, targetRevision: revision }));
+    const summary = summarizePlan(plan({ started: true, liveOnly: true, targetRevision: revision }));
     expect(summary.lines[0]).toContain("without a restart");
     expect(summary.tone).toBe("success");
   });
