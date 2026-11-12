@@ -23,7 +23,7 @@ service StartedService {
   rpc RefreshRemoteProviders(RefreshRemoteProvidersRequest) returns(RemoteProviderRefreshResponse) {}
 
   rpc URLTest(URLTestRequest) returns(google.protobuf.Empty) {}
-  rpc SelectOutbound(SelectOutboundRequest) returns (google.protobuf.Empty) {}
+  rpc SelectOutbound(SelectOutboundRequest) returns (SelectOutboundResponse) {}
   rpc SetGroupExpand(SetGroupExpandRequest) returns (google.protobuf.Empty) {}
 
   rpc SubscribeConnections(SubscribeConnectionsRequest) returns(stream ConnectionEvents) {}
@@ -157,6 +157,19 @@ message URLTestRequest {
 message SelectOutboundRequest {
   string groupTag = 1;
   string outboundTag = 2;
+  // The caller's identity for THIS attempt, echoed in the response so a confirmation that
+  // arrives after the caller moved on cannot settle a different request.
+  uint64 requestId = 3;
+  // The group revision the caller last observed; 0 means "do not judge staleness".
+  uint64 expectedRevision = 4;
+}
+
+// The group's state after the selection: not what the caller asked for, but what it holds.
+message SelectOutboundResponse {
+  uint64 requestId = 1;
+  uint64 appliedRevision = 2;
+  string appliedOutboundTag = 3;
+  bool stale = 4;
 }
 
 message SetGroupExpandRequest {

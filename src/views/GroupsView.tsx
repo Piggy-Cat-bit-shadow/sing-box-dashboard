@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { proxyDisplayType, urlTestDelayTone } from "../api/format";
 import { useStream } from "../api/stream";
@@ -13,6 +13,7 @@ import { Badge, Card, IconButton, MenuItem, Spinner, useContextMenu } from "../c
 import type { Group, GroupItem } from "../gen/daemon/started_service_pb";
 import styles from "./GroupsView.module.css";
 import { cx } from "../lib/cx";
+import { SelectionLedger } from "../lib/selectionLedger";
 
 export function GroupsView() {
   const api = useApi();
@@ -42,7 +43,18 @@ function GroupCard(props: { group: Group }) {
   const group = props.group;
   const [testing, setTesting] = useState(false);
   const [expanded, setExpandOverride] = usePendingValue(group.isExpand);
-  const [selected, setPendingSelection] = usePendingValue(group.selected);
+  // The latest selection attempt for this group. A tag cannot tell two attempts apart, so the
+  // answer is settled by the request id the daemon echoes.
+  const selectionLedger = useRef(new SelectionLedger());
+  const [pendingSelection, setPendingSelection] = useState<string | null>(null);
+  const selected = pendingSelection ?? group.selected;
+
+  useEffect(() => {
+    // The stream caught up with the member the user picked: the optimistic overlay can go.
+    if (pendingSelection !== null && group.selected === pendingSelection) {
+      setPendingSelection(null);
+    }
+  }, [group.selected, pendingSelection]);
 
   const toggleExpand = () => {
     const next = !expanded;
@@ -62,11 +74,30 @@ function GroupCard(props: { group: Group }) {
     if (!group.selectable || item.tag === selected) {
       return;
     }
+    const snapshot = selectionLedger.current.begin(group.tag, item.tag);
     setPendingSelection(item.tag);
-    api.selectOutbound(group.tag, item.tag).catch((error: unknown) => {
-      setPendingSelection(null);
-      showError(error);
-    });
+    api
+      .selectOutboundWithRequest(group.tag, item.tag, snapshot.requestId, snapshot.expectedRevision)
+      .then((response) => {
+        const settlement = selectionLedger.current.settle(snapshot, {
+          requestId: response.requestId,
+          appliedOutboundTag: response.appliedOutboundTag,
+          appliedRevision: response.appliedRevision,
+          stale: response.stale,
+        });
+        if (settlement.kind === "applied") {
+          // Follow the member the group HOLDS, not the one that was requested.
+          setPendingSelection(settlement.outboundTag);
+        } else if (settlement.kind === "unconfirmed" || settlement.kind === "failed") {
+          setPendingSelection(null);
+        }
+        // ignored-older-* : a newer attempt owns this group, so leave its pending value alone.
+      })
+      .catch((error: unknown) => {
+        selectionLedger.current.fail(snapshot, String(error));
+        setPendingSelection(null);
+        showError(error);
+      });
   };
 
   return (

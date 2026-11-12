@@ -21,6 +21,7 @@ import { Spinner, Switch } from "./components/ui";
 import { ServiceStatus_Type } from "./gen/daemon/started_service_pb";
 import type { Group } from "./gen/daemon/started_service_pb";
 import { cx } from "./lib/cx";
+import { SelectionLedger } from "./lib/selectionLedger";
 import { watchStoredValues } from "./lib/storage";
 import styles from "./TrayMenu.module.css";
 
@@ -504,6 +505,18 @@ function GroupNodes(props: { group: Group; api: DaemonApi; onClose: () => void }
   const { t } = useI18n();
   const group = props.group;
   const [testing, setTesting] = useState(false);
+  // The latest selection attempt for this group, settled by the request identity the daemon
+  // echoes. The menu is rebuilt from the groups stream, so this only has to keep the radio on the
+  // attempt that is still in flight.
+  const selectionLedger = useRef(new SelectionLedger());
+  const [pendingSelection, setPendingSelection] = useState<string | null>(null);
+  const selected = pendingSelection ?? group.selected;
+
+  useEffect(() => {
+    if (pendingSelection !== null && group.selected === pendingSelection) {
+      setPendingSelection(null);
+    }
+  }, [group.selected, pendingSelection]);
 
   const runURLTest = () => {
     setTesting(true);
@@ -514,10 +527,31 @@ function GroupNodes(props: { group: Group; api: DaemonApi; onClose: () => void }
   };
 
   const selectItem = (tag: string) => {
-    if (tag === group.selected) {
+    if (tag === selected) {
       return;
     }
-    props.api.selectOutbound(group.tag, tag).catch(showError);
+    const snapshot = selectionLedger.current.begin(group.tag, tag);
+    setPendingSelection(tag);
+    props.api
+      .selectOutboundWithRequest(group.tag, tag, snapshot.requestId, snapshot.expectedRevision)
+      .then((response) => {
+        const settlement = selectionLedger.current.settle(snapshot, {
+          requestId: response.requestId,
+          appliedOutboundTag: response.appliedOutboundTag,
+          appliedRevision: response.appliedRevision,
+          stale: response.stale,
+        });
+        if (settlement.kind === "applied") {
+          setPendingSelection(settlement.outboundTag);
+        } else if (settlement.kind === "unconfirmed" || settlement.kind === "failed") {
+          setPendingSelection(null);
+        }
+      })
+      .catch((error: unknown) => {
+        selectionLedger.current.fail(snapshot, String(error));
+        setPendingSelection(null);
+        showError(error);
+      });
   };
 
   return (
@@ -556,7 +590,7 @@ function GroupNodes(props: { group: Group; api: DaemonApi; onClose: () => void }
             }}
           >
             <span className={styles.rowIcon}>
-              {item.tag === group.selected && <Icon name="check" size={16} />}
+              {item.tag === selected && <Icon name="check" size={16} />}
             </span>
             <span className={styles.rowLabel}>{item.tag}</span>
             {item.urlTestDelay > 0 && (

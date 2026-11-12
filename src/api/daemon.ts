@@ -1,4 +1,4 @@
-﻿import type { DescMessage, DescMethodBiDiStreaming } from "@bufbuild/protobuf";
+import type { DescMessage, DescMethodBiDiStreaming } from "@bufbuild/protobuf";
 import type { Client, Transport } from "@connectrpc/connect";
 import { Code, ConnectError, createClient } from "@connectrpc/connect";
 import { createGrpcWebTransport } from "@connectrpc/connect-web";
@@ -19,6 +19,7 @@ import {
   USBIPServerStatus,
   type OpenConnectEndpointStatus,
   type OpenVPNEndpointStatus,
+  type SelectOutboundResponse,
 } from "../gen/daemon/started_service_pb";
 import {
   openBidirectionalStream,
@@ -508,6 +509,22 @@ export class DaemonApi {
 
   async selectOutbound(groupTag: string, outboundTag: string): Promise<void> {
     await this.client.selectOutbound({ groupTag, outboundTag });
+  }
+
+  /**
+   * A selection that carries the caller's attempt identity and the group revision it last saw.
+   *
+   * The answer is the group's state after the selection, so the page can settle only the attempt
+   * that still owns the row. An old daemon answers without the identity fields (requestId 0); that
+   * is a capability answer, not a confirmation.
+   */
+  async selectOutboundWithRequest(
+    groupTag: string,
+    outboundTag: string,
+    requestId: bigint,
+    expectedRevision: bigint,
+  ): Promise<SelectOutboundResponse> {
+    return await this.client.selectOutbound({ groupTag, outboundTag, requestId, expectedRevision });
   }
 
   async setGroupExpand(groupTag: string, isExpand: boolean): Promise<void> {
