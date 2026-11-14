@@ -64,12 +64,33 @@ describe("summarizeRemoteUpdate", () => {
     expect(summary.tone).toBe("error");
   });
 
-  it("names an old daemon instead of claiming an empty success", () => {
+  it("names an old service instead of claiming an empty success", () => {
     const summary = summarizeRemoteUpdate(
       update({ providers: { status: "unsupported" } }),
     );
-    expect(summary.providers).toContain("predates");
+    expect(summary.providers).toContain("does not support");
     expect(summary.tone).toBe("warning");
+  });
+
+  it("does not hide a failed provider behind a partial result", () => {
+    const summary = summarizeRemoteUpdate(
+      update({
+        providers: {
+          status: "partial",
+          counts: { published: 1, unchanged: 0, failed: 1, skipped: 0, busy: 0, pending: 2, restartRequired: 0, total: 2 },
+        },
+      }),
+    );
+    expect(summary.providers).toContain("2 pending");
+    expect(summary.providers).toContain("1 failed");
+    expect(summary.tone).toBe("error");
+  });
+
+  it("renders both lines through the catalog translator", () => {
+    const summary = summarizeRemoteUpdate(update(), (key) => `T:${key}`);
+    expect(summary.config).toBe("T:Config applied");
+    expect(summary.providers).toBe("T:Providers: {published} published");
+    expect(summary.tone).toBe("success");
   });
 
   it("does not attribute a provider report to an instance replaced mid-update", () => {

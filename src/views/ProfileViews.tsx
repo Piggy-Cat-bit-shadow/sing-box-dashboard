@@ -205,7 +205,8 @@ function ShareMenuItems(props: {
  * exception dialog); the user could not tell whether the nodes or the config had taken effect.
  */
 function RemoteUpdateStatus(props: { result: DesktopRemoteProfileUpdate; compact?: boolean }) {
-  const summary = summarizeRemoteUpdate(props.result);
+  const { t } = useI18n();
+  const summary = summarizeRemoteUpdate(props.result, t);
   const icon = summary.tone === "success" ? "check" : "warning_amber";
   return (
     <span
